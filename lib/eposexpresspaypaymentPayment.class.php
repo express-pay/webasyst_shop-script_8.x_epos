@@ -38,7 +38,7 @@ class eposexpresspaypaymentPayment extends waPayment implements waIPayment
             'FailUrl' => $this->getAdapter()->getBackUrl(waAppPayment::URL_FAIL),
         );
 
-        $hidden_fields['Signature'] = $this->compute_signature_add_invoice($hidden_fields, $this->EPOS_EXPRESSPAY_SECRET_WORD, $this->EPOS_EXPRESSPAY_TOKEN);
+        $hidden_fields['Signature'] = $this->compute_signature($hidden_fields, $this->EPOS_EXPRESSPAY_SECRET_WORD, $this->EPOS_EXPRESSPAY_TOKEN);
         $view = wa()->getView();
 
         $isTest = $this->EPOS_EXPRESSPAY_TESTMODE;
@@ -61,6 +61,9 @@ class eposexpresspaypaymentPayment extends waPayment implements waIPayment
         $orderId = $order_data['id_str'];
         $eposCode = "$serviceProviderEposCode-$serviceEposId-$orderId";
 
+        $qrCode = $this->getQrCode($respone['ExpressPayInvoiceNo']);
+        $qrCodeDescription = 'Отсканируйте QR-код для оплаты';
+
         if (isset($respone['Errors'])) {
             return array(
                 'redirect' => $this->getAdapter()->getBackUrl(waAppPayment::URL_FAIL),
@@ -69,6 +72,8 @@ class eposexpresspaypaymentPayment extends waPayment implements waIPayment
             $view = wa()->getView();
             $view->assign('order_id', str_replace('#', '', $orderId));
             $view->assign('epos_code', str_replace('#', '', $eposCode));
+            $view->assign('qr_code', str_replace('#', '', '<img src="data:image/jpeg;base64,' . $qrCode . '"  width="400" height="200"/>'));
+            $view->assign('qr_code_description', str_replace('#', '', $qrCodeDescription));
             echo ($this->path);
             return $view->fetch($this->path . '/templates/success.html');
         }
@@ -87,38 +92,79 @@ class eposexpresspaypaymentPayment extends waPayment implements waIPayment
         return $response;
     }
 
-    private function compute_signature_add_invoice($request_params, $secret_word, $token)
+    /**
+     * 
+     * Получения Qr-кода
+     * 
+     * @param int $invoice_no Номер счета полученый в процессе выставления его выставления
+     * 
+     * @return string $result Qr-код в формате base64
+     * 
+     */
+    private function getQrCode($invoice_no)
+    {
+        $params = array(
+            "Token" => $this->EPOS_EXPRESSPAY_TOKEN,
+            "InvoiceId" => $invoice_no,
+            'ViewType' => 'base64'
+        );
+
+        $url = 'https://api.express-pay.by/v1/qrcode/getqrcode/?';
+
+        $params["Signature"] = $this->compute_signature($params, $this->EPOS_EXPRESSPAY_SECRET_WORD, $this->EPOS_EXPRESSPAY_TOKEN, 'get_qr_code');
+
+        $request_params_for_qr  = http_build_query($params);
+
+        $response_qr = file_get_contents($url . $request_params_for_qr);
+        $response_qr = json_decode($response_qr, true);
+
+        return $response_qr['QrCodeBody'];
+    }
+
+    private function compute_signature($request_params, $secret_word, $token, $method = 'add_invoice')
     {
         $secret_word = trim($secret_word);
         $normalized_params = array_change_key_case($request_params, CASE_LOWER);
         $api_method = array(
-            "serviceid",
-            "accountno",
-            "amount",
-            "currency",
-            "expiration",
-            "info",
-            "surname",
-            "firstname",
-            "patronymic",
-            "city",
-            "street",
-            "house",
-            "building",
-            "apartment",
-            "isnameeditable",
-            "isaddresseditable",
-            "isamounteditable",
-            "emailnotification",
-            "smsphone",
-            "returntype",
-            "returnurl",
-            "failurl"
+            'add_invoice' => array(
+                "serviceid",
+                "accountno",
+                "amount",
+                "currency",
+                "expiration",
+                "info",
+                "surname",
+                "firstname",
+                "patronymic",
+                "city",
+                "street",
+                "house",
+                "building",
+                "apartment",
+                "isnameeditable",
+                "isaddresseditable",
+                "isamounteditable",
+                "emailnotification",
+                "smsphone",
+                "returntype",
+                "returnurl",
+                "failurl"
+            ),
+            'get_qr_code' => array(
+                "invoiceid",
+                "viewtype",
+                "imagewidth",
+                "imageheight"
+            ),
+            'add_invoice_return' => array(
+                "accountno",
+                "invoiceno"
+            )
         );
 
         $result = $token;
 
-        foreach ($api_method as $item)
+        foreach ($api_method[$method] as $item)
             $result .= (isset($normalized_params[$item])) ? $normalized_params[$item] : '';
         $hash = strtoupper(hash_hmac('sha1', $result, $secret_word));
 
@@ -171,12 +217,12 @@ class eposexpresspaypaymentPayment extends waPayment implements waIPayment
             $data = json_decode($data, true);
             if ($this->EPOS_EXPRESSPAY_USE_NOTIF_SECRET_WORD || isset($signature)) {
                 $computeSignature = $this->computeNotifSignature($_POST['Data'], $this->EPOS_EXPRESSPAY_NOTIF_SECRET_WORD);
-                if ($computeSignature == $signature){
-                    $transaction_data = $this->formalizeDataTwo($request, $data); 
+                if ($computeSignature == $signature) {
+                    $transaction_data = $this->formalizeDataTwo($request, $data);
                 } else {
                     header("HTTP/1.0 403 Forbidden");
                     echo 'Incorrect Digital Signature';
-                    die(); 
+                    die();
                 }
             } else {
                 $transaction_data = $this->formalizeDataTwo($request, $data);
