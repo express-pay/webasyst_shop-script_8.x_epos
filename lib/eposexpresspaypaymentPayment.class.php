@@ -29,7 +29,7 @@ class eposexpresspaypaymentPayment extends waPayment implements waIPayment
         $order = waOrder::factory($order_data);
         $hidden_fields = array(
             'ServiceId'         => $this->EPOS_EXPRESSPAY_SERVICEID,
-            'AccountNo'         => str_replace('#', '', $order_data['id_str']),
+            'AccountNo'         => $order_data['id'],
             'Amount' => number_format($order->total, 2, '.', ''),
             'Currency' => "933",
             'Info' => $this->EPOS_EXPRESSPAY_INFO,
@@ -58,7 +58,7 @@ class eposexpresspaypaymentPayment extends waPayment implements waIPayment
 
         $serviceProviderEposCode = $this->EPOS_EXPRESSPAY_SERVICE_PROVIDER__EPOS_ID;
         $serviceEposId = $this->EPOS_EXPRESSPAY_SERVICE_EPOS_ID;
-        $orderId = $order_data['id_str'];
+        $orderId = $order_data['id'];
         $eposCode = "$serviceProviderEposCode-$serviceEposId-$orderId";
 
         $qrCode = $this->getQrCode($respone['ExpressPayInvoiceNo']);
@@ -273,6 +273,7 @@ class eposexpresspaypaymentPayment extends waPayment implements waIPayment
 
         if (isset($request['action']) && $request['action'] == 'notify') {
             header("HTTP/1.0 200 OK");
+            print_r($result);
             echo 'SUCCESS';
             die();
         } else {
