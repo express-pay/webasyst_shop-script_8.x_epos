@@ -19,14 +19,15 @@
         </tr>
     </tbody>
 </table>
-<input type="hidden" value="{$epos_code}" id="epos_code">
+<input type="text" style="position: absolute; left: -1000px; top: -1000px" value="{$epos_code}" id="epos_code">
 <button onclick="copyLink()">Скопировать номер лицевого счета</button>
 <script>
         function copyLink() {
         try {
             var copyText = document.getElementById("epos_code");
             copyText.select();
-            document.execCommand('copy');
+            var result = document.execCommand('copy');
+            alert(result ? 'Скопировано!' : 'Ошибка!')
         } catch (e) {
             console.error("Opps: " + e);
         }
